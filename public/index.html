@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login - Photo Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDK (compat) -->
+    <script defer src="/__/firebase/12.6.0/firebase-app-compat.js"></script>
+    <script defer src="/__/firebase/12.6.0/firebase-auth-compat.js"></script>
+    <script defer src="/__/firebase/init.js?useEmulator=false"></script>
+
+    <style>
+      :root {
+        --bg: #0f172a;
+        --card: #111827;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #7dd3fc;
+        --border: #1f2937;
+        --radius: 14px;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: 'IBM Plex Sans', 'Segoe UI', 'Noto Sans JP', system-ui, -apple-system, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        display: grid;
+        place-items: center;
+      }
+      .login-card {
+        width: 100%;
+        max-width: 380px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 24px;
+      }
+      .title {
+        font-size: 20px;
+        font-weight: 600;
+        margin-bottom: 20px;
+        text-align: center;
+        color: var(--accent);
+      }
+      .form-group {
+        margin-bottom: 16px;
+      }
+      .form-group label {
+        display: block;
+        font-size: 14px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      .form-group input {
+        width: 100%;
+        padding: 10px;
+        background: #0b1222;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-size: 16px;
+      }
+      button {
+        width: 100%;
+        padding: 12px;
+        background: var(--accent);
+        border: none;
+        border-radius: 8px;
+        color: #0b1222;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .error {
+        color: #fca5a5;
+        font-size: 14px;
+        margin-top: 16px;
+        text-align: center;
+      }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="title">Photo Viewer Login</div>
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" required>
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" required>
+        </div>
+        <button id="loginButton">Login</button>
+        <p class="error" id="errorMessage"></p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                const app = firebase.app();
+                const auth = firebase.auth();
+
+                // Redirect if already logged in
+                auth.onAuthStateChanged(user => {
+                    if (user) {
+                        window.location.href = '/main.html';
+                    }
+                });
+
+                const loginButton = document.getElementById('loginButton');
+                const emailInput = document.getElementById('email');
+                const passwordInput = document.getElementById('password');
+                const errorMessage = document.getElementById('errorMessage');
+
+                loginButton.addEventListener('click', () => {
+                    const email = emailInput.value;
+                    const password = passwordInput.value;
+                    errorMessage.textContent = '';
+
+                    if (!email || !password) {
+                        errorMessage.textContent = 'Please enter email and password.';
+                        return;
+                    }
+
+                    auth.signInWithEmailAndPassword(email, password)
+                        .then((userCredential) => {
+                            // Signed in
+                            window.location.href = '/main.html';
+                        })
+                        .catch((error) => {
+                            errorMessage.textContent = error.message;
+                        });
+                });
+            } catch (e) {
+                console.error('Firebase init failed', e);
+                document.getElementById('errorMessage').textContent = 'Firebase initialization failed.';
+            }
+        });
+    </script>
+</body>
+</html>

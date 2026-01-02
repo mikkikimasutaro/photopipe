@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Photo Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDK (compat) -->
+    <script defer src="/__/firebase/12.6.0/firebase-app-compat.js"></script>
+    <script defer src="/__/firebase/12.6.0/firebase-auth-compat.js"></script>
+    <script defer src="/__/firebase/12.6.0/firebase-firestore-compat.js"></script>
+    <script defer src="/__/firebase/12.6.0/firebase-storage-compat.js"></script>
+    <script defer src="/__/firebase/init.js?useEmulator=false"></script>
+
+    <style>
+      .logout-button {
+        background: #ef4444;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        border: none;
+        transition: background-color 0.15s ease;
+      }
+      .logout-button:hover {
+        background: #dc2626;
+      }
+    </style>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --card: #111827;
+        --card-strong: #0b1222;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #7dd3fc;
+        --accent-strong: #38bdf8;
+        --border: #1f2937;
+        --radius: 14px;
+        --shadow: 0 20px 60px rgba(0,0,0,0.35);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: 'IBM Plex Sans', 'Segoe UI', 'Noto Sans JP', system-ui, -apple-system, sans-serif;
+        background: radial-gradient(circle at 20% 20%, rgba(56,189,248,0.12), transparent 25%),
+                    radial-gradient(circle at 80% 0%, rgba(14,165,233,0.14), transparent 22%),
+                    var(--bg);
+        color: var(--text);
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; text-decoration: none; }
+      .app {
+        margin: 0 auto;
+      }
+      header.topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 18px;
+        background: rgba(17,24,39,0.75);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(12px);
+      }
+      .brand {
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--accent);
+      }
+      .status {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .breadcrumbs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 18px 2px 6px;
+        align-items: center;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .crumb {
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(31,41,55,0.8);
+        border: 1px solid var(--border);
+        cursor: pointer;
+        transition: transform 0.1s ease, border-color 0.15s ease;
+      }
+      .crumb:hover { transform: translateY(-1px); border-color: var(--accent-strong); }
+      .crumb.current { background: var(--accent-strong); color: #0b1222; font-weight: 600; }
+      .content {
+        display: grid;
+        gap: 16px;
+      }
+      .panel {
+        background: rgba(15,23,42,0.78);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 18px 16px 14px;
+        box-shadow: var(--shadow);
+      }
+      .panel-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .panel-title {
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+      }
+      .panel-meta {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .folder-grid, .photo-grid {
+        display: grid;
+        gap: 12px;
+      }
+      .folder-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+      .photo-grid {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0;
+      }
+      .folder-card, .photo-card {
+        position: relative;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: linear-gradient(150deg, var(--card), var(--card-strong));
+        padding: 8px;
+        cursor: pointer;
+        transition: transform 0.12s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        overflow: hidden;
+      }
+      .folder-card:hover, .photo-card:hover { 
+        transform: translateY(-2px);
+        border-color: var(--accent-strong);
+        box-shadow: 0 18px 35px rgba(0,0,0,0.35);
+      }
+      .photo-card { 
+        border: none;
+        border-radius: 0;
+        background: none;
+        padding: 0;
+      }
+      .photo-card:hover { 
+        transform: none;
+        border-color: none;
+        box-shadow: none;
+      }
+      .folder-name {
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      .folder-meta, .photo-meta {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .folder-icon {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        color: var(--accent);
+        font-weight: 600;
+        font-size: 18px;
+      }
+      .photo-thumb {
+        width: 100%;
+        aspect-ratio: 4 / 3;
+        background: #0b1222;
+        object-fit: cover;
+        display: block;
+        border-radius: 0;
+        border: none;
+      }
+      .empty {
+        color: var(--muted);
+        font-size: 14px;
+        padding: 8px 4px;
+      }
+      .spinner {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 3px solid rgba(255,255,255,0.08);
+        border-top-color: var(--accent-strong);
+        animation: spin 0.8s linear infinite;
+      }
+      .center-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--muted);
+        padding: 10px 2px;
+        font-size: 14px;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .toast {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        background: rgba(15,23,42,0.92);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px 14px;
+        box-shadow: var(--shadow);
+        font-size: 13px;
+        color: var(--muted);
+        opacity: 0;
+        transform: translateY(8px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        z-index: 20;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .viewer {
+        position: fixed;
+        inset: 0;
+        background: rgba(9,12,19,0.9);
+        backdrop-filter: blur(66px);
+        display: grid;
+        place-items: center;
+        z-index: 30;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+      }
+      .viewer.show {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .viewer-card {
+        width: 100vw;
+        height: 100vh;
+        position: relative;
+      }
+      .viewer img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .viewer-close {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px 12px;
+        color: var(--text);
+        cursor: pointer;
+      }
+      @media (max-width: 780px) {
+        .panel-header { flex-direction: column; align-items: flex-start; }
+      }
+      @media (max-width: 640px) {
+        .folder-grid, .photo-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">Photo Viewer</div>
+        <div>
+          <button id="logoutButton" class="logout-button" style="display:none;">Logout</button>
+          <div class="status" id="status">Firebase SDK を初期化中...</div>
+        </div>
+      </header>
+
+      <div class="breadcrumbs" id="breadcrumbs"></div>
+
+      <main class="content">
+        <section class="panel">
+          <div class="panel-header">
+            <div class="panel-title">Folders</div>
+            <div class="panel-meta" id="folderCount"></div>
+          </div>
+          <div id="folderGrid" class="folder-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div class="panel-title">Photos</div>
+            <div class="panel-meta" id="photoCount"></div>
+          </div>
+          <div id="photoGrid" class="photo-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <div class="viewer" id="viewer">
+      <div class="viewer-card">
+        <button class="viewer-close" id="viewerClose">Close</button>
+        <img id="viewerImg" alt="photo">
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const statusEl = document.getElementById('status');
+        const folderGrid = document.getElementById('folderGrid');
+        const photoGrid = document.getElementById('photoGrid');
+        const folderCount = document.getElementById('folderCount');
+        const photoCount = document.getElementById('photoCount');
+        const breadcrumbsEl = document.getElementById('breadcrumbs');
+        const toastEl = document.getElementById('toast');
+        const viewer = document.getElementById('viewer');
+        const viewerImg = document.getElementById('viewerImg');
+        const viewerClose = document.getElementById('viewerClose');
+
+        let db, storage, auth;
+        const urlCache = new Map();
+        let currentPath = '';
+        const logoutButton = document.getElementById('logoutButton');
+
+        const useEmulator = false; // set true to use local emulators
+
+        function showToast(message) {
+          toastEl.textContent = message;
+          toastEl.classList.add('show');
+          setTimeout(() => toastEl.classList.remove('show'), 2800);
+        }
+
+        function normalizePathFromHash() {
+          const raw = decodeURIComponent(location.hash.replace(/^#/, '') || '');
+          if (!raw || raw === '/' || raw === '#') return '';
+          const leading = raw.startsWith('/') ? raw : '/' + raw;
+          const cleaned = leading.replace(/\/+/g, '/').replace(/\/$/, '');
+          return cleaned === '/' ? '' : cleaned;
+        }
+
+        function buildHash(path) {
+          if (!path) return '#/';
+          const encoded = path.split('/').filter(Boolean).map(encodeURIComponent).join('/');
+          return '#/' + encoded;
+        }
+
+        function updateBreadcrumbs(path) {
+          breadcrumbsEl.innerHTML = '';
+          const parts = path ? path.split('/').filter(Boolean) : [];
+          const crumbs = [{ label: 'Root', path: '' }];
+          let acc = '';
+          parts.forEach(part => {
+            acc += '/' + part;
+            crumbs.push({ label: part, path: acc });
+          });
+          crumbs.forEach((c, idx) => {
+            const el = document.createElement('div');
+            el.textContent = c.label;
+            el.className = 'crumb' + (idx === crumbs.length - 1 ? ' current' : '');
+            if (idx !== crumbs.length - 1) {
+              el.addEventListener('click', () => navigateTo(c.path));
+            }
+            breadcrumbsEl.appendChild(el);
+          });
+        }
+
+        function updateStatus(msg) {
+          statusEl.textContent = msg;
+        }
+
+        async function getDownloadUrl(path) {
+          if (!path) return null;
+          if (urlCache.has(path)) return urlCache.get(path);
+          const url = await storage.ref(path).getDownloadURL();
+          urlCache.set(path, url);
+          return url;
+        }
+
+        async function fetchFolders(path) {
+          // Root: accept both "" and "/" to avoid data-entry variance.
+          const queries = path
+            ? [db.collection('folders').where('parentPath', '==', path)]
+            :
+              [
+                db.collection('folders').where('parentPath', '==', ''),
+                db.collection('folders').where('parentPath', '==', '/'),
+              ];
+
+          const results = [];
+          for (const q of queries) {
+            const ordered = q.orderBy('order').orderBy('name');
+            try {
+              const snap = await ordered.get();
+              results.push(...snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            } catch (err) {
+              console.warn('Folder query (ordered) failed, fallback without order:', err.code || err.message);
+              const snap = await q.get();
+              results.push(...snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            }
+          }
+          // Deduplicate by path.
+          const seen = new Set();
+          return results.filter(f => {
+            const key = f.path || f.id;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        }
+
+        async function fetchPhotos(path) {
+          const base = db.collection('photos').where('folderPath', '==', path || '');
+          const ordered = base.orderBy('order').orderBy('fileName');
+          try {
+            const snap = await ordered.get();
+            return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          } catch (err) {
+            console.warn('Photo query (ordered) failed, fallback without order:', err.code || err.message);
+            const snap = await base.get();
+            return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          }
+        }
+
+        function renderFolders(folders) {
+          folderGrid.innerHTML = '';
+          folderCount.textContent = folders.length ? folders.length + ' folders' : '0 folders';
+          if (!folders.length) {
+            folderGrid.innerHTML = '<div class="empty">サブフォルダはありません</div>';
+            return;
+          }
+          folders.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || (a.name || '').localeCompare(b.name || ''));
+          folders.forEach(f => {
+            const card = document.createElement('div');
+            card.className = 'folder-card';
+            card.innerHTML = `
+              <div class="folder-icon">▸</div>
+              <div class="folder-name">${f.name || f.id}</div>
+              <div class="folder-meta">${f.path || ''}</div>
+            `;
+            card.addEventListener('click', () => navigateTo(f.path || ''));
+            folderGrid.appendChild(card);
+          });
+        }
+
+        function renderPhotos(photos) {
+          photoGrid.innerHTML = '';
+          photoCount.textContent = photos.length ? photos.length + ' photos' : '0 photos';
+          if (!photos.length) {
+            photoGrid.innerHTML = '<div class="empty">写真はありません</div>';
+            return;
+          }
+          photos.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || (a.fileName || '').localeCompare(b.fileName || ''));
+          photos.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'photo-card';
+            const img = document.createElement('img');
+            img.className = 'photo-thumb';
+            img.loading = 'lazy';
+            img.alt = p.fileName || p.id;
+            img.src = p.thumbUrl || '';
+            card.appendChild(img);
+            card.addEventListener('click', () => openViewer(p));
+            photoGrid.appendChild(card);
+          });
+        }
+
+        function formatDate(ts) {
+          if (!ts || !ts.toDate) return '';
+          const d = ts.toDate();
+          return d.toLocaleString();
+        }
+
+        async function openViewer(photo) {
+          viewer.classList.add('show');
+          viewerImg.src = '';
+          try {
+            const mediumUrl = await getDownloadUrl(photo.mediumPath);
+            viewerImg.src = mediumUrl || '';
+          } catch (err) {
+            showToast('Medium画像の取得に失敗しました: ' + (err.code || err.message));
+          }
+        }
+
+        viewer.addEventListener('click', (e) => {
+          if (e.target === viewer) viewer.classList.remove('show');
+        });
+        viewerClose.addEventListener('click', () => viewer.classList.remove('show'));
+
+        async function loadPath(path) {
+          currentPath = path;
+          updateBreadcrumbs(path);
+          folderGrid.innerHTML = '<div class="center-row"><div class="spinner"></div><div>フォルダを読み込み中...</div></div>';
+          photoGrid.innerHTML = '<div class="center-row"><div class="spinner"></div><div>写真を読み込み中...</div></div>';
+          try {
+            const [folders, photosRaw] = await Promise.all([fetchFolders(path), fetchPhotos(path)]);
+            const photos = await Promise.all(photosRaw.map(async (p) => {
+              try {
+                const thumbUrl = await getDownloadUrl(p.thumbPath);
+                return { ...p, thumbUrl };
+              } catch (err) {
+                console.warn('Thumb getDownloadURL failed for', p.thumbPath, err.code || err.message);
+                return { ...p, thumbUrl: '' };
+              }
+            }));
+            renderFolders(folders);
+            renderPhotos(photos);
+            updateStatus(`Path: ${path || '/'} | ${folders.length} folders / ${photos.length} photos`);
+          } catch (err) {
+            folderGrid.innerHTML = '';
+            photoGrid.innerHTML = '';
+            showToast('読み込みでエラーが発生しました: ' + (err.code || err.message));
+            updateStatus('Error: ' + (err.code || err.message));
+          }
+        }
+
+        function navigateTo(path) {
+          if (path === currentPath) {
+            return loadPath(path);
+          }
+          location.hash = buildHash(path);
+        }
+
+        function onRouteChange() {
+          const path = normalizePathFromHash();
+          loadPath(path);
+        }
+
+        try {
+          const app = firebase.app();
+          auth = firebase.auth();
+          db = firebase.firestore();
+          storage = firebase.storage();
+
+          auth.onAuthStateChanged(user => {
+            if (user) {
+              logoutButton.style.display = 'block';
+              console.log("Logged in as", user.email);
+            } else {
+              logoutButton.style.display = 'none';
+              console.log("No user logged in, redirecting...");
+              window.location.href = '/';
+            }
+          });
+
+          logoutButton.addEventListener('click', () => {
+            auth.signOut().then(() => {
+              window.location.href = '/';
+            }).catch((error) => {
+              showToast('ログアウトに失敗しました: ' + error.message);
+              console.error('Logout failed', error);
+            });
+          });
+
+          if (useEmulator) {
+            auth.useEmulator(`http://127.0.0.1:9099`);
+            db.useEmulator('127.0.0.1', 8080);
+            storage.useEmulator('127.0.0.1', 9199);
+            updateStatus('Emulator mode');
+          } else {
+            updateStatus('Connected');
+          }
+          window.addEventListener('hashchange', onRouteChange);
+          onRouteChange();
+        } catch (err) {
+          updateStatus('Firebase 初期化に失敗しました');
+          showToast(err.message || err.code || 'Init error');
+          console.error(err);
+        }
+      });
+    </script>
+  </body>
+</html>
