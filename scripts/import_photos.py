@@ -20,14 +20,14 @@ Prereqs (install):
   pip install firebase-admin Pillow
 
 Auth:
-- Set GOOGLE_APPLICATION_CREDENTIALS to a service account JSON,
-  or pass --service-account /path/to/key.json.
+- Uses the fixed service account JSON bundled with this repo.
 """
 
 from __future__ import annotations
 
 import argparse
-import os
+import sys
+import time
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -39,24 +39,29 @@ from pillow_heif import register_heif_opener
 
 register_heif_opener()
 
+BASE_DIR = Path(__file__).resolve().parents[1]
+SERVICE_ACCOUNT_PATH = BASE_DIR / "mikkikicom-firebase-adminsdk-fbsvc-06bdbf6b0d.json"
+STORAGE_BUCKET = "mikkikicom.firebasestorage.app"
+
+
+def elog(msg: str):
+    sys.stderr.write(f"[import_photos] {time.strftime('%H:%M:%S')} {msg}\n")
+    sys.stderr.flush()
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Import photos to Firestore + Storage")
+    p = argparse.ArgumentParser(description="scan and create lightweight images optimized for viewing on smartphones and upload them to Firebase Storage")
     p.add_argument("--input-dir", required=True, help="Local folder to scan (images only)")
-    p.add_argument("--bucket", required=True, help="Firebase Storage bucket name (e.g. myapp.appspot.com)")
-    p.add_argument("--root-path", default="", help="Virtual root path prefix in Firestore (e.g. /2024). Default ''")
-    p.add_argument("--service-account", help="Service account JSON path (falls back to GOOGLE_APPLICATION_CREDENTIALS)")
+    p.add_argument("--root-path", required=True, help="Virtual root path prefix in Firestore (e.g. /2024)")
     p.add_argument("--dry-run", action="store_true", help="Do not write to Firestore/Storage")
     return p.parse_args()
 
 
-def init_firebase(bucket: str, service_account: str | None):
-    if service_account:
-        cred = credentials.Certificate(service_account)
-    else:
-        cred = credentials.ApplicationDefault()
-    firebase_admin.initialize_app(cred, {"storageBucket": bucket})
+def init_firebase():
+    if not SERVICE_ACCOUNT_PATH.exists():
+        raise SystemExit(f"Service account JSON not found: {SERVICE_ACCOUNT_PATH}")
+    cred = credentials.Certificate(str(SERVICE_ACCOUNT_PATH))
+    firebase_admin.initialize_app(cred, {"storageBucket": STORAGE_BUCKET})
     return firestore.client(), storage.bucket()
 
 
@@ -208,17 +213,24 @@ def collect_folders(items: List[Tuple[Path, str]], root_path: str) -> List[Dict]
             )
     return folders
 
-
 def main():
     args = parse_args()
+    elog(f"start argv={sys.argv!r}")
+    elog(f"args input_dir={args.input_dir!r} root_path={args.root_path!r} dry_run={args.dry_run!r}")
+
     validate_virtual_root(args.root_path)
     base = Path(args.input_dir).expanduser().resolve()
+    elog(f"resolved base={str(base)!r} exists={base.exists()} is_dir={base.is_dir()}")
+
     if not base.exists():
         raise SystemExit(f"Input dir not found: {base}")
 
     print(f"Scanning images under: {base}")
     print(f"Virtual root path    : '{normalize_path(args.root_path)}'")
+    elog("collect_items begin")
     items = collect_items(base)
+    elog(f"collect_items done count={len(items)}")
+
     if not items:
         print("No images found.")
         return
@@ -228,7 +240,7 @@ def main():
     if args.dry_run:
         db = bucket = None
     else:
-        db, bucket = init_firebase(args.bucket, args.service_account)
+        db, bucket = init_firebase()
 
     ensure_folder_docs(db, folders, args.dry_run)
 
@@ -243,7 +255,6 @@ def main():
 
     upload_and_make_docs(db, bucket, ordered_items, args.root_path, args.dry_run)
     print("Done.")
-
 
 if __name__ == "__main__":
     main()
