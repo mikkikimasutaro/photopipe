@@ -13,7 +13,7 @@ export async function POST(req: Request) {
       deviceId?: string;
     };
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY ?? process.env.gemini_api_key;
     if (!apiKey) {
       return NextResponse.json({ error: "Missing GEMINI_API_KEY" }, { status: 500 });
     }

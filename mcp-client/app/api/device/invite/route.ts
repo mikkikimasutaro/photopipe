@@ -12,7 +12,7 @@ type InviteRequest = {
 
 export async function POST(req: Request) {
   try {
-    const secret = process.env.PAIRING_SECRET;
+    const secret = process.env.PAIRING_SECRET ?? process.env.pairing_secret;
     if (!secret) {
       return NextResponse.json({ error: "Missing PAIRING_SECRET" }, { status: 500 });
     }

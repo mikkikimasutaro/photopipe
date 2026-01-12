@@ -42,20 +42,30 @@ def _serialize(obj: Any) -> Any:
 
 
 def _load_service_account() -> Dict[str, Any] | None:
-    json_env = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+    json_env = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON") or os.getenv(
+        "firebase_service_account_json"
+    )
     if json_env:
         return json.loads(json_env)
 
-    path_env = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH")
+    path_env = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH") or os.getenv(
+        "firebase_service_account_path"
+    )
     if path_env and Path(path_env).exists():
         return json.loads(Path(path_env).read_text(encoding="utf-8"))
 
     if DEFAULT_SERVICE_ACCOUNT.exists():
         return json.loads(DEFAULT_SERVICE_ACCOUNT.read_text(encoding="utf-8"))
 
-    client_email = os.getenv("FIREBASE_CLIENT_EMAIL")
-    private_key = os.getenv("FIREBASE_PRIVATE_KEY")
-    project_id = os.getenv("FIREBASE_PROJECT_ID")
+    client_email = os.getenv("FIREBASE_CLIENT_EMAIL") or os.getenv(
+        "firebase_client_email"
+    )
+    private_key = os.getenv("FIREBASE_PRIVATE_KEY") or os.getenv(
+        "firebase_private_key"
+    )
+    project_id = os.getenv("FIREBASE_PROJECT_ID") or os.getenv(
+        "firebase_project_id"
+    )
     if client_email and private_key:
         return {
             "type": "service_account",
@@ -68,7 +78,9 @@ def _load_service_account() -> Dict[str, Any] | None:
 
 
 def init_firebase() -> None:
-    database_url = os.getenv("FIREBASE_DATABASE_URL")
+    database_url = os.getenv("FIREBASE_DATABASE_URL") or os.getenv(
+        "firebase_database_url"
+    )
     if not database_url:
         raise SystemExit("Missing FIREBASE_DATABASE_URL")
 
@@ -210,15 +222,15 @@ async def _process_requests(session: ClientSession, device_id: str) -> None:
 async def run() -> None:
     init_firebase()
 
-    device_id = os.getenv("MCP_DEVICE_ID")
+    device_id = os.getenv("MCP_DEVICE_ID") or os.getenv("mcp_device_id")
     if not device_id:
-        invite_id = os.getenv("PAIRING_INVITE_ID")
+        invite_id = os.getenv("PAIRING_INVITE_ID") or os.getenv("pairing_invite_id")
         if not invite_id:
             raise SystemExit("Set MCP_DEVICE_ID or PAIRING_INVITE_ID")
         device_id = claim_invite(invite_id)
         log(f"paired deviceId={device_id}")
 
-    mcp_url = os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8000/sse")
+    mcp_url = os.getenv("MCP_SERVER_URL") or os.getenv("mcp_server_url") or "http://127.0.0.1:8000/sse"
 
     async with sse_client(mcp_url) as streams:
         async with ClientSession(
