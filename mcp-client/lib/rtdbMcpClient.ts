@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import type { DatabaseReference } from "firebase-admin/database";
 import { getRtdb } from "@/lib/firebaseAdmin";
 
 type ListToolsResult = {
@@ -85,7 +84,7 @@ export class RtdbMcpClient {
   }
 
   private async waitForResponse(
-    responseRef: DatabaseReference,
+    responseRef: any,
     timeoutMs: number
   ): Promise<RtdbResponse> {
     return new Promise((resolve, reject) => {
