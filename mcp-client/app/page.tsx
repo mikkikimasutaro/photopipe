@@ -8,6 +8,7 @@ type MediaItem = {
   type: "image" | "video";
   mime?: string;
   name?: string;
+  url?: string;
 };
 
 const URL_RE = /(https?:\/\/[^\s]+)/;
@@ -48,6 +49,7 @@ function extractMediaBlocks(text: string) {
           type: parsed.type,
           mime: typeof parsed.mime === "string" ? parsed.mime : undefined,
           name: typeof parsed.name === "string" ? parsed.name : undefined,
+          url: typeof parsed.url === "string" ? parsed.url : undefined,
         });
         return "";
       }
@@ -165,7 +167,9 @@ export default function Home() {
                       <>
                         {text ? renderWithLinks(text) : null}
                         {media.map((item, idx) => {
-                          const src = `/api/media?path=${encodeURIComponent(item.path)}`;
+                          const src =
+                            item.url ??
+                            `/api/media?path=${encodeURIComponent(item.path)}`;
                           return (
                             <div key={`${item.path}-${idx}`} className="media">
                               {item.type === "image" ? (

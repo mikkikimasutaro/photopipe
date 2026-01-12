@@ -34,7 +34,7 @@ export async function POST(req: Request) {
         temperature: 0.2,
         tools: [mcpToTool(mcpClient as any)],
         systemInstruction:
-          "When a tool response includes viewer_url, reply with that URL explicitly. When a tool response includes media_path, reply with a single [[media]]...[[/media]] block that contains JSON with keys: path, type, mime, name. Do not include the file path outside the media block. root_path means a virtual Firestore path (e.g. 'samplephotos' or '/2024/Trip'), not a local filesystem path. Never ask for absolute local paths for root_path; explain it if the user is confused.",
+          "When a tool response includes viewer_url, reply with that URL explicitly. When a tool response includes media_path, reply with a single [[media]]...[[/media]] block that contains JSON with keys: path, type, mime, name, url. Use url when provided for playback/display. Do not include the file path outside the media block. root_path means a virtual Firestore path (e.g. 'samplephotos' or '/2024/Trip'), not a local filesystem path. Never ask for absolute local paths for root_path; explain it if the user is confused.",
         // automaticFunctionCalling: { disable: true },
       },
     });

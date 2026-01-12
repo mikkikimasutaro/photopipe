@@ -26,6 +26,7 @@ server.sh (starts MCP server):
 export MCP_TRANSPORT="sse"
 export MCP_HOST="127.0.0.1"
 export MCP_PORT="8000"
+export MCP_STORAGE_PREFIX="on_demand"
 export PAIRING_INVITE_ID="INVITE_ID_FROM_API"
 python ./scripts/server.py
 ```
@@ -89,6 +90,7 @@ firebase apphosting:secrets:grantaccess pairing_secret --backend <BACKEND_NAME>
 export MCP_TRANSPORT="sse"
 export MCP_HOST="127.0.0.1"
 export MCP_PORT="8000"
+export MCP_STORAGE_PREFIX="on_demand"
 python ./scripts/server.py
 ```
 

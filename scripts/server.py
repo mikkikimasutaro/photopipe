@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 import sys
 import time
 import traceback
+from datetime import timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any
+
+import firebase_admin
+from firebase_admin import credentials, storage as fb_storage
 
 from mcp.server.fastmcp import FastMCP
 
@@ -25,6 +30,9 @@ mcp = FastMCP(
 SCRIPT_PATH = Path(__file__).with_name("import_photos.py")
 FIND_SCRIPT_PATH = Path(__file__).with_name("find_directory.py")
 LIST_MEDIA_PATH = Path(__file__).with_name("list_media.py")
+DEFAULT_SERVICE_ACCOUNT_PATH = Path(__file__).resolve().parents[1] / "mikkikicom-firebase-adminsdk-fbsvc-06bdbf6b0d.json"
+STORAGE_BUCKET = os.getenv("FIREBASE_STORAGE_BUCKET", "mikkikicom.firebasestorage.app").strip()
+ON_DEMAND_PREFIX = os.getenv("MCP_STORAGE_PREFIX", "on_demand").strip().strip("/")
 
 IMAGE_EXTS = {
     ".jpg", ".jpeg", ".png", ".heic", ".webp", ".gif", ".bmp", ".tiff", ".tif"
@@ -90,6 +98,54 @@ def _viewer_url(root_path: str) -> str:
     if rp:
         return f"{base}/{rp}"
     return f"{base}/"
+
+_bucket: Optional[fb_storage.bucket.Bucket] = None
+
+
+def _get_bucket() -> Optional[fb_storage.bucket.Bucket]:
+    global _bucket
+    if _bucket is not None:
+        return _bucket
+
+    if firebase_admin._apps:
+        try:
+            _bucket = fb_storage.bucket()
+            return _bucket
+        except Exception:
+            pass
+
+    path_env = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH") or os.getenv("firebase_service_account_path")
+    if not path_env:
+        path_env = str(DEFAULT_SERVICE_ACCOUNT_PATH)
+    if not Path(path_env).exists():
+        _log(f"[MCP] storage disabled (service account not found at {path_env})")
+        _bucket = None
+        return None
+
+    cred = credentials.Certificate(path_env)
+    firebase_admin.initialize_app(cred, {"storageBucket": STORAGE_BUCKET})
+    _bucket = fb_storage.bucket()
+    return _bucket
+
+
+def _storage_key(p: Path, size_bytes: int, mtime_ns: int) -> str:
+    seed = f"{p.as_posix()}:{size_bytes}:{mtime_ns}"
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()
+    return f"{ON_DEMAND_PREFIX}/{digest}/{p.name}"
+
+
+def _get_storage_url(p: Path, mime: str) -> Optional[str]:
+    bucket = _get_bucket()
+    if not bucket:
+        return None
+
+    st = p.stat()
+    key = _storage_key(p, st.st_size, st.st_mtime_ns)
+    blob = bucket.blob(key)
+    if not blob.exists():
+        blob.upload_from_filename(str(p), content_type=mime)
+
+    return blob.generate_signed_url(expiration=timedelta(hours=1), method="GET")
 
 
 @mcp.tool()
@@ -347,9 +403,11 @@ def get_media(
         return {"ok": False, "error": f"unsupported media type: {p.suffix!r}"}
 
     size_bytes = p.stat().st_size
+    storage_url = _get_storage_url(p, mime)
     return {
         "ok": True,
         "media_path": str(p),
+        "storage_url": storage_url,
         "media_type": kind,
         "mime_type": mime,
         "file_name": p.name,
@@ -358,6 +416,7 @@ def get_media(
         "type": kind,
         "mime": mime,
         "name": p.name,
+        "url": storage_url,
     }
 
 
