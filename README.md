@@ -66,6 +66,10 @@ python scripts/rtdb_relay.py
 This setup lets the Next.js client use Firebase RTDB to talk to a local MCP server.
 The relay runs as a Python script so it can share the same environment as the MCP server.
 
+### App Hosting config (apphosting.yaml)
+For App Hosting, use `mcp-client/apphosting.yaml` to declare env vars and secrets.
+Secrets referenced in the YAML must be created in App Hosting (Secrets) or Secret Manager.
+
 ### Required env (Next.js + relay)
 - `FIREBASE_DATABASE_URL`
 - one of:

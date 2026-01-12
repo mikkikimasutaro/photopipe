@@ -1,0 +1,29 @@
+env:
+  - variable: mcp_transport
+    value: "rtdb"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: firebase_database_url
+    value: "https://mikkikicom-default-rtdb.firebaseio.com"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: firebase_project_id
+    value: "mikkikicom"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: gemini_api_key
+    secret: gemini_api_key
+    availability:
+      - RUNTIME
+  - variable: firebase_service_account_json
+    secret: firebase_service_account_json
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: pairing_secret
+    secret: pairing_secret
+    availability:
+      - RUNTIME
