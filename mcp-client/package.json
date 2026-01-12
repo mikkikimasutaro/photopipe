@@ -5,11 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "relay": "node ./scripts/rtdb_relay.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.34.0",
     "@modelcontextprotocol/sdk": "^1.25.1",
+    "firebase-admin": "^12.7.0",
     "next": "16.1.1",
     "react": "19.2.3",
     "react-dom": "19.2.3"

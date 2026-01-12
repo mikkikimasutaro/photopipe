@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Msg = { role: "user" | "assistant"; content: string };
 type MediaItem = {
@@ -62,6 +62,7 @@ function extractMediaBlocks(text: string) {
 
 export default function Home() {
   const [input, setInput] = useState("");
+  const [deviceId, setDeviceId] = useState("");
   const [messages, setMessages] = useState<Msg[]>([
     {
       role: "assistant",
@@ -69,6 +70,17 @@ export default function Home() {
     },
   ]);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("mcpDeviceId");
+    if (saved) setDeviceId(saved);
+  }, []);
+
+  useEffect(() => {
+    if (deviceId) {
+      window.localStorage.setItem("mcpDeviceId", deviceId);
+    }
+  }, [deviceId]);
 
   const canSend = useMemo(() => input.trim().length > 0 && !busy, [input, busy]);
 
@@ -84,7 +96,7 @@ export default function Home() {
       const r = await fetch("/api/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ messages: next }),
+        body: JSON.stringify({ messages: next, deviceId: deviceId || undefined }),
       });
 
       const raw = await r.text();
@@ -117,6 +129,16 @@ export default function Home() {
       <div className="container">
         <header className="hero">
           <h1>ローカルメディアエージェント（デモ）</h1>
+          <div className="device-row">
+            <label htmlFor="deviceId">Device ID</label>
+            <input
+              id="deviceId"
+              placeholder="ペアリング済みのDevice ID"
+              value={deviceId}
+              onChange={(e) => setDeviceId(e.target.value)}
+              disabled={busy}
+            />
+          </div>
           <p className="sub">
              ・ 写真・動画を含むディレクトリを検索できます。例: Capturesを検索
           </p>
@@ -267,6 +289,28 @@ export default function Home() {
           margin: 8px 0 0;
           font-size: 30px;
           font-weight: 600;
+        }
+        .device-row {
+          margin-top: 16px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .device-row label {
+          font-size: 12px;
+          letter-spacing: 0.2em;
+          text-transform: uppercase;
+          color: #6b6b6b;
+        }
+        .device-row input {
+          min-width: 260px;
+          padding: 8px 12px;
+          border-radius: 999px;
+          border: 1px solid rgba(0, 0, 0, 0.12);
+          background: #fff;
+          font-size: 13px;
+          outline: none;
         }
         .hero .sub {
           margin-top: 10px;

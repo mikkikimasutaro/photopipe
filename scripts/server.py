@@ -59,7 +59,7 @@ LOG_TAIL = 2000
 RET_TAIL = 20000
 
 # MCPのタイムアウトより短くする（MCPがタイムアウトすると情報が消えるので）
-SUBPROCESS_TIMEOUT_SEC = 50
+SUBPROCESS_TIMEOUT_SEC = 120
 
 
 def _ts() -> str:

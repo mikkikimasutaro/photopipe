@@ -8,7 +8,10 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { messages } = (await req.json()) as { messages: Msg[] };
+    const { messages, deviceId } = (await req.json()) as {
+      messages: Msg[];
+      deviceId?: string;
+    };
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -17,9 +20,8 @@ export async function POST(req: Request) {
 
     const ai = new GoogleGenAI({ apiKey });
 
-    const mcpClient = await getMcpClient();
+    const mcpClient = await getMcpClient(deviceId);
 
-    // ✅ Geminiのroleは user / model のみ。assistant は model に変換する。
     const contents = messages.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
@@ -30,7 +32,7 @@ export async function POST(req: Request) {
       contents,
       config: {
         temperature: 0.2,
-        tools: [mcpToTool(mcpClient)],
+        tools: [mcpToTool(mcpClient as any)],
         systemInstruction:
           "When a tool response includes viewer_url, reply with that URL explicitly. When a tool response includes media_path, reply with a single [[media]]...[[/media]] block that contains JSON with keys: path, type, mime, name. Do not include the file path outside the media block. root_path means a virtual Firestore path (e.g. 'samplephotos' or '/2024/Trip'), not a local filesystem path. Never ask for absolute local paths for root_path; explain it if the user is confused.",
         // automaticFunctionCalling: { disable: true },
@@ -39,7 +41,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ text: (resp.text ?? "").trim() });
   } catch (e: any) {
-    // 失敗しても必ずJSONを返す（UI側がr.json()で落ちない）
     return NextResponse.json(
       { error: e?.message ?? String(e) },
       { status: 500 }
