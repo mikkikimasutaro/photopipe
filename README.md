@@ -69,6 +69,12 @@ The relay runs as a Python script so it can share the same environment as the MC
 ### App Hosting config (apphosting.yaml)
 For App Hosting, use `mcp-client/apphosting.yaml` to declare env vars and secrets.
 Secrets referenced in the YAML must be created in App Hosting (Secrets) or Secret Manager.
+After creating secrets, grant the App Hosting backend access:
+```sh
+firebase apphosting:secrets:grantaccess gemini_api_key --backend <BACKEND_NAME>
+firebase apphosting:secrets:grantaccess firebase_service_account_json --backend <BACKEND_NAME>
+firebase apphosting:secrets:grantaccess pairing_secret --backend <BACKEND_NAME>
+```
 
 ### Required env (Next.js + relay)
 - `FIREBASE_DATABASE_URL`
