@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "relay": "node ./scripts/rtdb_relay.mjs"
+    "relay": "node ./scripts/rtdb_relay.mjs",
+    "test": "node --test tests/**/*.test.js"
   },
   "dependencies": {
     "@google/genai": "^1.34.0",
