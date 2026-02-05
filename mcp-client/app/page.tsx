@@ -175,7 +175,7 @@ export default function Home() {
 
       <div className="container">
         <header className="hero">
-          <h1>ローカルメディアエージェント（デモ）</h1>
+          <h1>PhotoPipeクライアント</h1>
           <div className="device-row">
             <label htmlFor="deviceId">Device ID</label>
             <input

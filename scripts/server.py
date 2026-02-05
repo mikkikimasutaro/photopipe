@@ -22,7 +22,7 @@ PORT = int(os.getenv("MCP_PORT", "8000"))
 MOUNT_PATH = os.getenv("MCP_MOUNT_PATH", "/").strip()
 
 mcp = FastMCP(
-    "Photo Import (Firestore/Storage)",
+    "PhotoPipe Agent (Firestore/Storage)",
     json_response=True,
     host=HOST,
     port=PORT,

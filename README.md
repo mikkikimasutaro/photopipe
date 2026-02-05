@@ -1,4 +1,10 @@
-# Photo Viewer
+# PhotoPipe
+
+System naming:
+- System: PhotoPipe
+- MCP Server / RTDB relay / JobWorker: PhotoPipe Agent
+- Chat UI (Firebase App Hosting): PhotoPipe Client
+- Photo Viewer UI (Firebase Hosting): PhotoViewer
 
 A web application for viewing photos, built with Node.js and Firebase.
 
