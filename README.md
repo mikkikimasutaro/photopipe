@@ -11,6 +11,59 @@ source scripts/.venv/bin/activate
 
 python3 scripts/import_photos.py --input-dir /mnt/landisk/Pictures/2014-02-03-samplephotos　新婚旅衁E --root-path samplephotos
 
+## Import jobs (Cloud Functions + Pub/Sub)
+
+The MCP `import_photos` tool now enqueues a job via a Firebase Cloud Function and
+uses Pub/Sub to manage long-running imports. The job unit is **one folder**.
+
+### Components
+- Cloud Function: `functions/index.js` -> `enqueueImportJob`
+- Pub/Sub topic: default `photo-import-jobs`
+- Worker (local PC): `scripts/import_worker.py` subscribes and runs `scripts/import_photos.py`
+- Firestore collection: `importJobs/{jobId}` (status: queued/running/done/error)
+
+### Cloud Function setup
+```sh
+cd functions
+npm install
+firebase deploy --only functions
+```
+
+Environment variables for the Cloud Function:
+- `IMPORT_JOBS_TOPIC` (default: `photo-import-jobs`)
+- `IMPORT_JOBS_COLLECTION` (default: `importJobs`)
+- `IMPORT_JOB_SECRET` (optional; if set, requests must include `x-import-job-secret`)
+
+### MCP server (enqueue)
+Required environment variables:
+- `IMPORT_JOBS_ENDPOINT` (Cloud Function URL)
+
+Optional:
+- `MCP_IMPORT_MODE` (`pubsub` default, set to `local` to run synchronously)
+- `IMPORT_JOB_REQUESTER` (free-form string, stored in job doc)
+- `IMPORT_JOB_WORKER_ID` (target worker ID for routing)
+- `IMPORT_JOB_SECRET` (required if Cloud Function secret is set)
+
+### MCP Client (status UI)
+The MCP Client UI shows recent import jobs from Firestore, including:
+- import source folder (`inputDir`)
+- export path (`rootPath`)
+- status (`queued`/`running`/`done`/`error`)
+
+### Worker (executes the job)
+Install dependency:
+```sh
+pip install google-cloud-pubsub firebase-admin Pillow pillow-heif
+```
+
+Run the worker:
+```sh
+export IMPORT_JOBS_SUBSCRIPTION="projects/<project>/subscriptions/<sub>"
+export FIREBASE_SERVICE_ACCOUNT_PATH="./your-firebase-adminsdk.json"
+python scripts/import_worker.py
+```
+
+
 
 ## Local-only files (not committed)
 

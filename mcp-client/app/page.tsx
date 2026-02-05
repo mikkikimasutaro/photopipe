@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { formatImportJob } from "@/lib/importJobs";
 
 type Msg = { role: "user" | "assistant"; content: string };
 type MediaItem = {
@@ -9,6 +10,17 @@ type MediaItem = {
   mime?: string;
   name?: string;
   url?: string;
+};
+type ImportJob = {
+  jobId: string;
+  status: string;
+  inputDir: string;
+  rootPath: string;
+  createdAt?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  error?: string | null;
+  title?: string;
 };
 
 const URL_RE = /(https?:\/\/[^\s]+)/;
@@ -72,10 +84,43 @@ export default function Home() {
     },
   ]);
   const [busy, setBusy] = useState(false);
+  const [importJobs, setImportJobs] = useState<ImportJob[]>([]);
+  const [importJobsError, setImportJobsError] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("mcpDeviceId");
     if (saved) setDeviceId(saved);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function loadJobs() {
+      try {
+        const r = await fetch("/api/import-jobs?limit=10");
+        const raw = await r.text();
+        if (!r.ok) {
+          throw new Error(raw || `HTTP ${r.status}`);
+        }
+        const data = raw ? JSON.parse(raw) : {};
+        const items = Array.isArray(data.items) ? data.items : [];
+        const mapped = items.map((item: ImportJob) => formatImportJob(item));
+        if (active) {
+          setImportJobs(mapped);
+          setImportJobsError(null);
+        }
+      } catch (e: any) {
+        if (active) {
+          setImportJobsError(e?.message ?? "Failed to load import jobs");
+        }
+      }
+    }
+
+    loadJobs();
+    const id = window.setInterval(loadJobs, 10000);
+    return () => {
+      active = false;
+      window.clearInterval(id);
+    };
   }, []);
 
   useEffect(() => {
@@ -191,6 +236,35 @@ export default function Home() {
             ))}
             {busy && <div className="status">処理中…</div>}
           </div>
+        </section>
+
+        <section className="jobs-card">
+          <div className="jobs-title">Import Jobs</div>
+          {importJobsError ? (
+            <div className="jobs-error">{importJobsError}</div>
+          ) : importJobs.length === 0 ? (
+            <div className="jobs-empty">No import jobs yet.</div>
+          ) : (
+            <ul className="jobs-list">
+              {importJobs.map((job) => (
+                <li key={job.jobId} className={`job-item status-${job.status}`}>
+                  <div className="job-row">
+                    <div className="job-paths">
+                      {job.title ?? `${job.inputDir} \u2192 ${job.rootPath}`}
+                    </div>
+                    <div className="job-status">{job.status}</div>
+                  </div>
+                  <div className="job-meta">
+                    <span className="job-id">ID: {job.jobId}</span>
+                    {job.createdAt && <span>created: {job.createdAt}</span>}
+                    {job.startedAt && <span>start: {job.startedAt}</span>}
+                    {job.finishedAt && <span>end: {job.finishedAt}</span>}
+                    {job.error && <span className="job-error">{job.error}</span>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
 
@@ -399,6 +473,87 @@ export default function Home() {
         .status {
           font-size: 12px;
           color: #7b7b7b;
+        }
+
+        .jobs-card {
+          margin-top: 18px;
+          border: 1px solid rgba(0, 0, 0, 0.06);
+          background: rgba(255, 255, 255, 0.9);
+          border-radius: 20px;
+          padding: 16px 20px;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+        .jobs-title {
+          font-size: 11px;
+          letter-spacing: 0.25em;
+          text-transform: uppercase;
+          color: #777;
+          margin-bottom: 12px;
+        }
+        .jobs-error,
+        .jobs-empty {
+          font-size: 13px;
+          color: #777;
+        }
+        .jobs-list {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          gap: 12px;
+        }
+        .job-item {
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          border-radius: 14px;
+          padding: 10px 12px;
+          background: #fff;
+        }
+        .job-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .job-paths {
+          font-size: 13px;
+          font-weight: 600;
+          color: #222;
+          word-break: break-all;
+        }
+        .job-status {
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          padding: 4px 8px;
+          border-radius: 999px;
+          background: #f1f5f9;
+          color: #475569;
+        }
+        .status-running .job-status {
+          background: #fff4d6;
+          color: #b45309;
+        }
+        .status-done .job-status {
+          background: #dcfce7;
+          color: #166534;
+        }
+        .status-error .job-status {
+          background: #fee2e2;
+          color: #b91c1c;
+        }
+        .job-meta {
+          margin-top: 6px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          font-size: 11px;
+          color: #6b7280;
+        }
+        .job-id {
+          color: #0f172a;
+        }
+        .job-error {
+          color: #b91c1c;
         }
 
         .composer-wrap {

@@ -15,6 +15,8 @@ from firebase_admin import credentials, storage as fb_storage
 
 from mcp.server.fastmcp import FastMCP
 
+import import_jobs
+
 HOST = os.getenv("MCP_HOST", "127.0.0.1").strip()
 PORT = int(os.getenv("MCP_PORT", "8000"))
 MOUNT_PATH = os.getenv("MCP_MOUNT_PATH", "/").strip()
@@ -69,6 +71,12 @@ RET_TAIL = 20000
 # MCPのタイムアウトより短くする（MCPがタイムアウトすると情報が消えるので）
 SUBPROCESS_TIMEOUT_SEC = 120
 
+IMPORT_MODE = os.getenv("MCP_IMPORT_MODE", "pubsub").strip().lower()
+IMPORT_JOBS_ENDPOINT = os.getenv("IMPORT_JOBS_ENDPOINT", "").strip()
+IMPORT_JOB_REQUESTER = os.getenv("IMPORT_JOB_REQUESTER", "").strip()
+IMPORT_JOB_WORKER_ID = os.getenv("IMPORT_JOB_WORKER_ID", "").strip()
+IMPORT_JOB_SECRET = os.getenv("IMPORT_JOB_SECRET", "").strip()
+
 
 def _ts() -> str:
     return time.strftime("%H:%M:%S")
@@ -83,6 +91,156 @@ def _tail(s: Optional[str], n: int) -> str:
     if not s:
         return ""
     return s[-n:]
+
+
+def _run_import_photos_subprocess(
+    input_dir: str,
+    root_path: str,
+    dry_run: bool,
+) -> Dict[str, Any]:
+    req_id = str(int(time.time() * 1000))
+    t0 = time.time()
+
+    _log(f"[MCP][{req_id}] import_photos LOCAL START")
+    _log(
+        f"[MCP][{req_id}] args input_dir={input_dir!r} "
+        f"root_path={root_path!r} dry_run={dry_run!r}"
+    )
+    _log(f"[MCP][{req_id}] cwd={os.getcwd()!r}")
+    _log(f"[MCP][{req_id}] sys.executable={sys.executable!r}")
+    _log(f"[MCP][{req_id}] SCRIPT_PATH={str(SCRIPT_PATH)!r} exists={SCRIPT_PATH.exists()}")
+
+    input_path = Path(input_dir)
+    if not input_path.exists() or not input_path.is_dir():
+        _log(f"[MCP][{req_id}] ERROR input_dir not found or not dir: {input_dir!r}")
+        return {
+            "ok": False,
+            "error": f"input_dir not found or not a directory: {input_dir!r}",
+            "hint": "Windows縺ｪ繧・C:/Users/... 縺ｮ繧医≧縺ｫ謖・ｮ壹＠縺ｦ縺上□縺輔＞",
+        }
+
+    if not SCRIPT_PATH.exists():
+        _log(f"[MCP][{req_id}] ERROR import_photos.py not found at {SCRIPT_PATH}")
+        return {"ok": False, "error": f"import_photos.py not found at {SCRIPT_PATH}"}
+
+    cmd = [sys.executable, str(SCRIPT_PATH), "--input-dir", input_dir]
+    if root_path:
+        cmd += ["--root-path", root_path]
+    if dry_run:
+        cmd += ["--dry-run"]
+
+    _log(f"[MCP][{req_id}] cmd={cmd}")
+
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+
+    try:
+        cp = subprocess.run(
+            cmd,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=SUBPROCESS_TIMEOUT_SEC,
+        )
+
+        dt = time.time() - t0
+        _log(f"[MCP][{req_id}] subprocess DONE rc={cp.returncode} elapsed={dt:.2f}s")
+        _log(f"[MCP][{req_id}] stdout(last{LOG_TAIL}):\n{_tail(cp.stdout, LOG_TAIL)}")
+        _log(f"[MCP][{req_id}] stderr(last{LOG_TAIL}):\n{_tail(cp.stderr, LOG_TAIL)}")
+
+        return {
+            "ok": cp.returncode == 0,
+            "exit_code": cp.returncode,
+            "command": cmd,
+            "elapsed_sec": round(dt, 3),
+            "stdout": _tail(cp.stdout, RET_TAIL),
+            "stderr": _tail(cp.stderr, RET_TAIL),
+            "viewer_url": _viewer_url(root_path),
+        }
+
+    except subprocess.TimeoutExpired as e:
+        dt = time.time() - t0
+        out = getattr(e, "stdout", None)
+        err = getattr(e, "stderr", None)
+
+        _log(f"[MCP][{req_id}] TIMEOUT elapsed={dt:.2f}s (>{SUBPROCESS_TIMEOUT_SEC}s)")
+        _log(f"[MCP][{req_id}] TIMEOUT cmd={cmd}")
+        if out or err:
+            _log(f"[MCP][{req_id}] timeout stdout(last{LOG_TAIL}):\n{_tail(out, LOG_TAIL)}")
+            _log(f"[MCP][{req_id}] timeout stderr(last{LOG_TAIL}):\n{_tail(err, LOG_TAIL)}")
+
+        return {
+            "ok": False,
+            "error": f"subprocess timeout (> {SUBPROCESS_TIMEOUT_SEC}s)",
+            "command": cmd,
+            "elapsed_sec": round(dt, 3),
+            "stdout": _tail(out, RET_TAIL),
+            "stderr": _tail(err, RET_TAIL),
+        }
+
+    except Exception:
+        dt = time.time() - t0
+        _log(f"[MCP][{req_id}] EXCEPTION elapsed={dt:.2f}s")
+        _log(traceback.format_exc())
+        return {
+            "ok": False,
+            "error": "exception in server.py",
+            "elapsed_sec": round(dt, 3),
+        }
+
+
+def _enqueue_import_job(
+    input_dir: str,
+    root_path: str,
+    dry_run: bool,
+) -> Dict[str, Any]:
+    req_id = str(int(time.time() * 1000))
+    _log(f"[MCP][{req_id}] import_photos QUEUE START")
+
+    input_path = Path(input_dir)
+    if not input_path.exists() or not input_path.is_dir():
+        _log(f"[MCP][{req_id}] ERROR input_dir not found or not dir: {input_dir!r}")
+        return {
+            "ok": False,
+            "error": f"input_dir not found or not a directory: {input_dir!r}",
+            "hint": "Windows縺ｪ繧・C:/Users/... 縺ｮ繧医≧縺ｫ謖・ｮ壹＠縺ｦ縺上□縺輔＞",
+        }
+
+    if not IMPORT_JOBS_ENDPOINT:
+        return {
+            "ok": False,
+            "error": "IMPORT_JOBS_ENDPOINT is not set",
+            "hint": "Set IMPORT_JOBS_ENDPOINT to the Cloud Function URL.",
+        }
+
+    try:
+        payload = import_jobs.build_job_payload(
+            input_dir=input_dir,
+            root_path=root_path,
+            dry_run=dry_run,
+            requested_by=IMPORT_JOB_REQUESTER or None,
+            worker_id=IMPORT_JOB_WORKER_ID or None,
+        )
+        headers = {"x-import-job-secret": IMPORT_JOB_SECRET} if IMPORT_JOB_SECRET else None
+        result = import_jobs.enqueue_job(IMPORT_JOBS_ENDPOINT, payload, timeout_sec=15, headers=headers)
+    except Exception as exc:
+        _log(f"[MCP][{req_id}] enqueue error: {exc}")
+        return {
+            "ok": False,
+            "error": "failed to enqueue import job",
+            "details": str(exc),
+        }
+
+    return {
+        "ok": True,
+        "job_id": result.get("job_id"),
+        "status": "queued",
+        "viewer_url": _viewer_url(root_path),
+        "endpoint": IMPORT_JOBS_ENDPOINT,
+    }
 
 def _media_kind_and_mime(ext: str) -> tuple[Optional[str], str]:
     el = ext.lower()
@@ -154,106 +312,9 @@ def import_photos(
     root_path: str,
     dry_run: bool = True,
 ) -> Dict[str, Any]:
-    req_id = str(int(time.time() * 1000))
-    t0 = time.time()
-
-    _log(f"[MCP][{req_id}] import_photos START")
-    _log(
-        f"[MCP][{req_id}] args input_dir={input_dir!r} "
-        f"root_path={root_path!r} dry_run={dry_run!r}"
-    )
-    _log(f"[MCP][{req_id}] cwd={os.getcwd()!r}")
-    _log(f"[MCP][{req_id}] sys.executable={sys.executable!r}")
-    _log(f"[MCP][{req_id}] SCRIPT_PATH={str(SCRIPT_PATH)!r} exists={SCRIPT_PATH.exists()}")
-
-    # 入力バリデーション（ここで落ちると一瞬で返る）
-    input_path = Path(input_dir)
-    if not input_path.exists() or not input_path.is_dir():
-        _log(f"[MCP][{req_id}] ERROR input_dir not found or not dir: {input_dir!r}")
-        return {
-            "ok": False,
-            "error": f"input_dir not found or not a directory: {input_dir!r}",
-            "hint": "Windowsなら C:/Users/... のように指定してください",
-        }
-
-    if not SCRIPT_PATH.exists():
-        _log(f"[MCP][{req_id}] ERROR import_photos.py not found at {SCRIPT_PATH}")
-        return {"ok": False, "error": f"import_photos.py not found at {SCRIPT_PATH}"}
-
-    # コマンド組み立て
-    
-    # cmd = [sys.executable, "-S", "-c", "import sys; sys.stderr.write('[no-site] OK\\n'); sys.stderr.flush(); sys.exit(0)"]
-    cmd = [sys.executable, str(SCRIPT_PATH), "--input-dir", input_dir]
-
-    # cmd = [sys.executable, str(SCRIPT_PATH), "--input-dir", str(input_path)]
-    if root_path:
-        cmd += ["--root-path", root_path]
-    if dry_run:
-        cmd += ["--dry-run"]
-
-    _log(f"[MCP][{req_id}] cmd={cmd}")
-
-    # env（import_photos.py の print を捕捉しやすく）
-    env = os.environ.copy()
-    env["PYTHONUNBUFFERED"] = "1"
-
-    try:
-        cp = subprocess.run(
-            cmd,
-            env=env,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-            timeout=SUBPROCESS_TIMEOUT_SEC,
-        )
-
-        dt = time.time() - t0
-        _log(f"[MCP][{req_id}] subprocess DONE rc={cp.returncode} elapsed={dt:.2f}s")
-        _log(f"[MCP][{req_id}] stdout(last{LOG_TAIL}):\n{_tail(cp.stdout, LOG_TAIL)}")
-        _log(f"[MCP][{req_id}] stderr(last{LOG_TAIL}):\n{_tail(cp.stderr, LOG_TAIL)}")
-
-        return {
-            "ok": cp.returncode == 0,
-            "exit_code": cp.returncode,
-            "command": cmd,
-            "elapsed_sec": round(dt, 3),
-            "stdout": _tail(cp.stdout, RET_TAIL),
-            "stderr": _tail(cp.stderr, RET_TAIL),
-            "viewer_url": _viewer_url(root_path),
-        }
-
-    except subprocess.TimeoutExpired as e:
-        dt = time.time() - t0
-        # TimeoutExpired でも部分出力を持っている場合がある
-        out = getattr(e, "stdout", None)
-        err = getattr(e, "stderr", None)
-
-        _log(f"[MCP][{req_id}] TIMEOUT elapsed={dt:.2f}s (>{SUBPROCESS_TIMEOUT_SEC}s)")
-        _log(f"[MCP][{req_id}] TIMEOUT cmd={cmd}")
-        if out or err:
-            _log(f"[MCP][{req_id}] timeout stdout(last{LOG_TAIL}):\n{_tail(out, LOG_TAIL)}")
-            _log(f"[MCP][{req_id}] timeout stderr(last{LOG_TAIL}):\n{_tail(err, LOG_TAIL)}")
-
-        return {
-            "ok": False,
-            "error": f"subprocess timeout (> {SUBPROCESS_TIMEOUT_SEC}s)",
-            "command": cmd,
-            "elapsed_sec": round(dt, 3),
-            "stdout": _tail(out, RET_TAIL),
-            "stderr": _tail(err, RET_TAIL),
-        }
-
-    except Exception:
-        dt = time.time() - t0
-        _log(f"[MCP][{req_id}] EXCEPTION elapsed={dt:.2f}s")
-        _log(traceback.format_exc())
-        return {
-            "ok": False,
-            "error": "exception in server.py",
-            "elapsed_sec": round(dt, 3),
-        }
+    if IMPORT_MODE == "local":
+        return _run_import_photos_subprocess(input_dir, root_path, dry_run)
+    return _enqueue_import_job(input_dir, root_path, dry_run)
 
 
 @mcp.tool()

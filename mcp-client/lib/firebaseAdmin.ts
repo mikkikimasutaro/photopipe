@@ -6,6 +6,7 @@ import {
   initializeApp,
 } from "firebase-admin/app";
 import { getDatabase } from "firebase-admin/database";
+import { getFirestore } from "firebase-admin/firestore";
 
 type ServiceAccount = {
   projectId?: string;
@@ -72,4 +73,8 @@ export function getAdminApp() {
 
 export function getRtdb() {
   return getDatabase(getAdminApp());
+}
+
+export function getFirestoreDb() {
+  return getFirestore(getAdminApp());
 }
