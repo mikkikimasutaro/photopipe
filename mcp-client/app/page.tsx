@@ -190,13 +190,13 @@ export default function Home() {
              ・ 写真・動画を含むディレクトリを検索できます。例: Capturesを検索
           </p>
           <p className="sub">
-             ・ 指定したディレクトリの写真・動画ファイルの一覧を表示できます。例: C:\Users\J0115990\Desktop\NodeScripts\photoviewer\samplephotos内のメディア一覧を表示して。
+             ・ 指定したディレクトリの写真・動画ファイルの一覧を表示できます。
           </p>
           <p className="sub">
-             ・ フルパスの写真/動画を指定して、チャット内で表示・再生できます。例: C:\Users\J0115990\Videos\Captures\2024-09-20 17-56-19.mp4 を再生して。）
+             ・ フルパスの写真/動画を指定して、チャット内で表示・再生できます。
           </p>
           <p className="sub">
-             ・ スマホ閲覧用に写真をリサイズして一括アップロードできます。例: C:\Users\J0115990\Desktop\NodeScripts\photoviewer\samplephotos を samplephotosにアップロードして。デモなのでdry-runで空実行して。
+             ・ スマホ閲覧用に写真をリサイズして一括アップロードできます。
           </p>
         </header>
 
