@@ -50,19 +50,48 @@ function extractMediaBlocks(text: string) {
       if (trimmed.startsWith("```")) {
         trimmed = trimmed.replace(/```(?:json)?/g, "").trim();
       }
-      const parsed = JSON.parse(trimmed);
-      if (
-        parsed &&
-        typeof parsed.path === "string" &&
-        (parsed.type === "image" || parsed.type === "video")
-      ) {
-        media.push({
-          path: parsed.path,
-          type: parsed.type,
-          mime: typeof parsed.mime === "string" ? parsed.mime : undefined,
-          name: typeof parsed.name === "string" ? parsed.name : undefined,
-          url: typeof parsed.url === "string" ? parsed.url : undefined,
-        });
+
+      const collected: MediaItem[] = [];
+      const pushMedia = (parsed: any) => {
+        if (Array.isArray(parsed)) {
+          parsed.forEach(pushMedia);
+          return;
+        }
+        if (
+          parsed &&
+          typeof parsed.path === "string" &&
+          (parsed.type === "image" || parsed.type === "video")
+        ) {
+          collected.push({
+            path: parsed.path,
+            type: parsed.type,
+            mime: typeof parsed.mime === "string" ? parsed.mime : undefined,
+            name: typeof parsed.name === "string" ? parsed.name : undefined,
+            url: typeof parsed.url === "string" ? parsed.url : undefined,
+          });
+        }
+      };
+
+      try {
+        const parsed = JSON.parse(trimmed);
+        pushMedia(parsed);
+      } catch {
+        const normalized = trimmed.replace(/}\s*{/g, "}\n{");
+        const lines = normalized.split(/\r?\n/);
+        for (const line of lines) {
+          const candidate = line.trim();
+          if (!candidate) continue;
+          try {
+            const parsed = JSON.parse(candidate);
+            pushMedia(parsed);
+          } catch {
+            // ignore non-JSON lines
+          }
+        }
+      }
+
+      if (collected.length > 0) {
+        media.push(...collected);
         return "";
       }
     } catch {
