@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { formatImportJob } from "@/lib/importJobs";
+import { shouldShowImportJobs } from "@/lib/uiFlags";
 
 type Msg = { role: "user" | "assistant"; content: string };
 type MediaItem = {
@@ -115,6 +116,7 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [importJobs, setImportJobs] = useState<ImportJob[]>([]);
   const [importJobsError, setImportJobsError] = useState<string | null>(null);
+  const showImportJobs = shouldShowImportJobs();
 
   useEffect(() => {
     const saved = window.localStorage.getItem("mcpDeviceId");
@@ -122,6 +124,9 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!showImportJobs) {
+      return;
+    }
     let active = true;
     async function loadJobs() {
       try {
@@ -150,7 +155,7 @@ export default function Home() {
       active = false;
       window.clearInterval(id);
     };
-  }, []);
+  }, [showImportJobs]);
 
   useEffect(() => {
     if (deviceId) {
@@ -267,34 +272,38 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="jobs-card">
-          <div className="jobs-title">Import Jobs</div>
-          {importJobsError ? (
-            <div className="jobs-error">{importJobsError}</div>
-          ) : importJobs.length === 0 ? (
-            <div className="jobs-empty">No import jobs yet.</div>
-          ) : (
-            <ul className="jobs-list">
-              {importJobs.map((job) => (
-                <li key={job.jobId} className={`job-item status-${job.status}`}>
-                  <div className="job-row">
-                    <div className="job-paths">
-                      {job.title ?? `${job.inputDir} \u2192 ${job.rootPath}`}
+        {showImportJobs ? (
+          <section className="jobs-card">
+            <div className="jobs-title">Import Jobs</div>
+            {importJobsError ? (
+              <div className="jobs-error">{importJobsError}</div>
+            ) : importJobs.length === 0 ? (
+              <div className="jobs-empty">No import jobs yet.</div>
+            ) : (
+              <ul className="jobs-list">
+                {importJobs.map((job) => (
+                  <li key={job.jobId} className={`job-item status-${job.status}`}>
+                    <div className="job-row">
+                      <div className="job-paths">
+                        {job.title ?? `${job.inputDir} \u2192 ${job.rootPath}`}
+                      </div>
+                      <div className="job-status">{job.status}</div>
                     </div>
-                    <div className="job-status">{job.status}</div>
-                  </div>
-                  <div className="job-meta">
-                    <span className="job-id">ID: {job.jobId}</span>
-                    {job.createdAt && <span>created: {job.createdAt}</span>}
-                    {job.startedAt && <span>start: {job.startedAt}</span>}
-                    {job.finishedAt && <span>end: {job.finishedAt}</span>}
-                    {job.error && <span className="job-error">{job.error}</span>}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+                    <div className="job-meta">
+                      <span className="job-id">ID: {job.jobId}</span>
+                      {job.createdAt && <span>created: {job.createdAt}</span>}
+                      {job.startedAt && <span>start: {job.startedAt}</span>}
+                      {job.finishedAt && <span>end: {job.finishedAt}</span>}
+                      {job.error && (
+                        <span className="job-error">{job.error}</span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ) : null}
       </div>
 
       <div className="composer-wrap">
