@@ -10,6 +10,10 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+from warnings_config import configure_warning_filters
+
+configure_warning_filters()
+
 import firebase_admin
 from firebase_admin import credentials, storage as fb_storage
 

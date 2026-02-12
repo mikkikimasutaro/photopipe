@@ -9,6 +9,10 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from warnings_config import configure_warning_filters
+
+configure_warning_filters()
+
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud import pubsub_v1
@@ -28,6 +32,9 @@ def _ts() -> str:
 
 
 def _log(msg: str) -> None:
+    level = os.getenv("IMPORT_WORKER_LOG_LEVEL", "info").strip().lower()
+    if level in {"quiet", "silent", "none"}:
+        return
     sys.stderr.write(f"[import_worker] {_ts()} {msg}\n")
     sys.stderr.flush()
 

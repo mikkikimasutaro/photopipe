@@ -9,6 +9,10 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict
 
+from warnings_config import configure_warning_filters
+
+configure_warning_filters()
+
 import anyio
 import firebase_admin
 from firebase_admin import credentials, db
