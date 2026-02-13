@@ -425,6 +425,9 @@ export default function Home() {
           border-radius: 999px;
           border: 1px solid rgba(0, 0, 0, 0.12);
           background: #fff;
+          color: #111;
+          -webkit-text-fill-color: #111;
+          caret-color: #111;
           font-size: 13px;
           outline: none;
         }
